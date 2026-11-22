@@ -1,4 +1,4 @@
-// Real-time solar wind from NOAA SWPC (DSCOVR / ACE / IMAP at L1).
+// Real-time solar wind from NOAA SWPC, measured by the active spacecraft at L1.
 //
 // Every data source in Solar Sound exports an object with this shape:
 //
