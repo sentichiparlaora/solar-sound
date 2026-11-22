@@ -5,12 +5,15 @@ import { Sonifier } from './audio/sonifier.js';
 import { StackedChart } from './ui/chart.js';
 import { normalize, noteName } from './util/scale.js';
 
+const ROLE_TEXT = { pitch: 'altezza', volume: 'volume', timbre: 'timbro' };
+
 const sonifier = new Sonifier();
 const button = document.getElementById('listen');
 const panels = document.getElementById('sources');
 
 // Build one panel (readouts + chart) per source and start polling it.
 for (const source of sources) {
+  sonifier.register(source.id, source.voice);
   const panel = renderPanel(source);
   panels.append(panel.root);
   poll(source, panel);
@@ -46,60 +49,72 @@ function renderPanel(source) {
   root.innerHTML = `
     <header class="source-head">
       <h2>${source.name}</h2>
+      <label class="mix"><input type="checkbox" checked> Nel mix</label>
       <p class="status" role="status">Caricamento dati…</p>
     </header>
     <div class="readouts"></div>
+    <div class="readouts secondary"></div>
     <p class="note" aria-live="polite"></p>
     <canvas class="chart" aria-label="Grafico delle ultime 2 ore"></canvas>
+    ${source.chartBands ? `<p class="legend"><span class="swatch"></span> Fasce grigie: ${source.chartBands.label}</p>` : ''}
   `;
 
-  const readouts = root.querySelector('.readouts');
+  const [primary, secondary] = root.querySelectorAll('.readouts');
   const values = {};
-  const roleText = { pitch: 'altezza', volume: 'volume', timbre: 'timbro' };
   for (const p of source.params) {
     const el = document.createElement('div');
     el.className = 'readout';
+    const unit = [p.unit, p.role && ROLE_TEXT[p.role]].filter(Boolean).join(' · ');
     el.innerHTML = `
       <span class="label">${p.label}</span>
       <span class="value">–</span>
-      <span class="unit">${p.unit}${p.role ? ` · ${roleText[p.role]}` : ''}</span>
+      <span class="unit">${unit}</span>
     `;
-    readouts.append(el);
+    (p.primary === false ? secondary : primary).append(el);
     values[p.key] = el.querySelector('.value');
   }
+  if (!secondary.children.length) secondary.remove();
+
+  root.querySelector('.mix input').addEventListener('change', (e) => {
+    sonifier.setEnabled(source.id, e.target.checked);
+  });
+
+  const canvas = root.querySelector('.chart');
+  const plotted = source.params.filter((p) => p.chart !== false).length;
+  canvas.style.height = `${plotted * 100 + 30}px`;
 
   return {
     root,
     values,
     status: root.querySelector('.status'),
     note: root.querySelector('.note'),
-    chart: new StackedChart(root.querySelector('.chart'), source.params, source),
+    chart: new StackedChart(canvas, source.params, source),
     lastSample: null,
   };
+}
+
+function formatValue(p, v) {
+  if (v == null) return '–';
+  if (p.format) return p.format(v);
+  return v.toLocaleString('it-IT', { maximumFractionDigits: p.digits, minimumFractionDigits: p.digits });
 }
 
 async function poll(source, panel) {
   try {
     const samples = await source.fetch();
+    if (!samples.length) throw new Error('nessun dato');
     const recent = samples.filter((s) => s.t >= samples.at(-1).t - source.historyMs);
-    if (!recent.length) throw new Error('nessun dato attivo');
 
-    // Latest sample per parameter (a field can be null in the newest record).
+    // Latest value per parameter (a field can be null in the newest record).
     const latest = {};
     for (const p of source.params) {
-      const s = [...recent].reverse().find((r) => r[p.key] != null);
+      const s = recent.findLast((r) => r[p.key] != null);
       latest[p.key] = s ? s[p.key] : null;
-    }
-
-    for (const p of source.params) {
-      const v = latest[p.key];
-      panel.values[p.key].textContent = v == null
-        ? '–'
-        : v.toLocaleString('it-IT', { maximumFractionDigits: p.digits, minimumFractionDigits: p.digits });
     }
 
     const controls = {};
     for (const p of source.params) {
+      panel.values[p.key].textContent = formatValue(p, latest[p.key]);
       if (p.role && latest[p.key] != null) controls[p.role] = normalize(latest[p.key], p);
     }
     sonifier.update(source.id, controls);
@@ -114,19 +129,22 @@ async function poll(source, panel) {
     console.error(`[${source.id}]`, err);
     panel.error = err;
   }
-  updateStatus(panel);
+  updateStatus(source, panel);
   setTimeout(() => poll(source, panel), source.pollMs);
 }
 
-function updateStatus(panel) {
+function updateStatus(source, panel) {
   const s = panel.lastSample;
+  const retry = source.pollMs >= 60_000 ? 'tra un minuto' : 'tra pochi secondi';
   let text = '';
   if (s) {
-    const time = s.t.toLocaleTimeString('it-IT', { hour: '2-digit', minute: '2-digit' });
+    const time = s.t.toLocaleTimeString('it-IT', {
+      hour: '2-digit', minute: '2-digit', second: source.pollMs < 60_000 ? '2-digit' : undefined,
+    });
     const ageMin = Math.max(0, Math.round((Date.now() - s.t) / 60000));
-    text = `Dato delle ${time} (${ageMin} min fa)${s.spacecraft ? ` · satellite ${s.spacecraft}` : ''}`;
+    text = `Dato delle ${time}${ageMin ? ` (${ageMin} min fa)` : ''}${s.spacecraft ? ` · satellite ${s.spacecraft}` : ''}`;
   }
-  if (panel.error) text = `Errore nel caricamento, riprovo tra un minuto. ${text}`;
+  if (panel.error) text = `Errore nel caricamento, riprovo ${retry}. ${text}`;
   panel.status.textContent = text || 'Caricamento dati…';
   panel.status.classList.toggle('error', Boolean(panel.error));
 }

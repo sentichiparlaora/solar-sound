@@ -4,10 +4,11 @@
 const GAP_MS = 3 * 60 * 1000; // break the line across data gaps
 
 export class StackedChart {
-  constructor(canvas, params, { historyMs }) {
+  constructor(canvas, params, { historyMs, chartBands = null }) {
     this.canvas = canvas;
-    this.params = params;
+    this.params = params.filter((p) => p.chart !== false);
     this.historyMs = historyMs;
+    this.bands = chartBands;
     this.samples = [];
     new ResizeObserver(() => this.draw()).observe(canvas);
     matchMedia('(prefers-color-scheme: dark)').addEventListener('change', () => this.draw());
@@ -47,6 +48,28 @@ export class StackedChart {
 
     g.font = '11px system-ui, sans-serif';
     g.textBaseline = 'middle';
+
+    // Shaded spans (e.g. ISS in Earth's shadow), behind every panel.
+    if (this.bands) {
+      const { key, when } = this.bands;
+      g.fillStyle = color('--band');
+      let spanStart = null;
+      const flush = (t) => {
+        if (spanStart == null) return;
+        const x0 = Math.max(padL, x(spanStart)), x1 = Math.min(w - padR, x(t));
+        if (x1 > x0) g.fillRect(x0, padT, x1 - x0, h - padT - axisH);
+        spanStart = null;
+      };
+      let prevT = null;
+      for (const s of this.samples) {
+        const t = s.t.getTime();
+        if (t < start) continue;
+        if (prevT != null && t - prevT > GAP_MS) flush(prevT);
+        if (when(s[key])) { if (spanStart == null) spanStart = t; } else flush(t);
+        prevT = t;
+      }
+      if (prevT != null) flush(prevT);
+    }
 
     this.params.forEach((p, i) => {
       const top = padT + i * (panelH + gapY);
@@ -114,8 +137,9 @@ export class StackedChart {
 }
 
 function formatTick(v) {
-  if (v >= 10000) return (v / 1000).toLocaleString('it-IT', { maximumFractionDigits: 0 }) + 'k';
-  if (v >= 100) return v.toLocaleString('it-IT', { maximumFractionDigits: 0 });
-  if (v >= 1) return v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
+  const a = Math.abs(v);
+  if (a >= 10000) return (v / 1000).toLocaleString('it-IT', { maximumFractionDigits: 0 }) + 'k';
+  if (a >= 10) return v.toLocaleString('it-IT', { maximumFractionDigits: 0 });
+  if (a >= 1) return v.toLocaleString('it-IT', { maximumFractionDigits: 1 });
   return v.toLocaleString('it-IT', { maximumFractionDigits: 2 });
 }

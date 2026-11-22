@@ -12,7 +12,16 @@
 //     ]          role is 'pitch' | 'volume' | 'timbre' (or null = display only)
 //     fetch():   async, resolves to samples sorted oldest -> newest:
 //                [{ t: Date, <key>: number|null, ... }]
+//
+//     Optional:
+//     voice:      { lowHz, highHz, wave, sub } audio register and colour
+//     chartBands: { key, when(value), label } shade chart spans
 //   }
+//
+//   Optional per-param fields:
+//     format(v)  text shown instead of the number (e.g. 'Al sole')
+//     primary    false = small readout (default true)
+//     chart      false = not plotted (default true)
 //
 // The app only depends on this contract, so a new source (e.g. the ISS)
 // is just another file in this folder registered in ./index.js.

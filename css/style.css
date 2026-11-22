@@ -8,6 +8,7 @@
   --accent-2: #3a7ca5;
   --accent-3: #9a4fb0;
   --error: #b3261e;
+  --band: rgba(60, 60, 90, 0.08);
   color-scheme: light dark;
 }
 
@@ -22,6 +23,7 @@
     --accent-2: #6fb3dc;
     --accent-3: #c88ee0;
     --error: #ff8a80;
+    --band: rgba(160, 170, 220, 0.10);
   }
 }
 
@@ -128,8 +130,28 @@ h1 { margin: 0; font-size: 2rem; letter-spacing: -0.01em; }
 .chart {
   display: block;
   width: 100%;
-  height: 320px;
+  height: 330px;
 }
+
+.source + .source { margin-top: 20px; }
+
+.mix {
+  margin-left: auto;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.875rem;
+  color: var(--muted);
+  cursor: pointer;
+}
+.mix input { accent-color: var(--accent); width: 16px; height: 16px; }
+.source-head .status { flex-basis: 100%; }
+
+.readouts.secondary { margin-top: 0; }
+.readouts.secondary .value { font-size: 1.5rem; color: var(--text); }
+
+.legend { margin: 6px 0 0; color: var(--muted); font-size: 0.8125rem; display: flex; align-items: center; gap: 6px; }
+.swatch { display: inline-block; width: 14px; height: 10px; border-radius: 2px; background: var(--band); box-shadow: inset 0 0 0 1px var(--grid); }
 
 footer { margin-top: 24px; color: var(--muted); font-size: 0.875rem; }
 footer a { color: inherit; }
